@@ -1,5 +1,3 @@
-[dns_servers]
-localhost ansible_connection=local
-
 [dns]
-localhost ansible_connection=local
+technitium01 
+technitium02 

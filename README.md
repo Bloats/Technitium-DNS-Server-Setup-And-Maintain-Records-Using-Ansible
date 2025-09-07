@@ -1,5 +1,5 @@
 This is my fork of the code - specific to my homelab environment - Bloats - Sept 2025
-
+Modified to be updates to DNS only - removed Docker install
 
 In this article, we are going to set up Technitium using Ansible and also maintain the DNS records by using Technitium Api.
 
