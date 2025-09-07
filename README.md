@@ -1,4 +1,4 @@
-This is my fork of the code - specific to my homelab environment - Bloates - Sept 2025
+This is my fork of the code - specific to my homelab environment - Bloats - Sept 2025
 
 
 In this article, we are going to set up Technitium using Ansible and also maintain the DNS records by using Technitium Api.
