@@ -1,0 +1,8 @@
+---
+- name: get dns records
+  hosts: dns
+  tasks:
+    - name: get dns
+      include_role:
+        name: technitium
+        tasks_from: get_records
