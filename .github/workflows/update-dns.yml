@@ -12,8 +12,6 @@ jobs:
     runs-on: [self-hosted]
     env:
       VAULT_PASS: ${{ secrets.VAULT_PASS }}
-    container:
-      image: python:3.12-bullseye   # override default image for this job
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
