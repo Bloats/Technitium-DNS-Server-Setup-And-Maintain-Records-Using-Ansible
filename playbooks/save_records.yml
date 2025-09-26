@@ -1,0 +1,31 @@
+---
+- name: get dns records from server
+  hosts: technitium01
+  gather_facts: false
+  tasks:
+    - name: get dns records
+      include_role:
+        name: technitium
+        tasks_from: get_records
+
+    - name: Format records for records.yml
+      set_fact:
+        formatted_records: "{{ formatted_records | default([]) + [{ 'zone': item.name | regex_replace('\\.local\\.langhome\\.net$', ''), 'name': '@' if (item.name == 'local.langhome.net') else (item.name | regex_replace('\\.local\\.langhome\\.net$', '')), 'ip': item.rData.ipAddress }] }}"
+      when: 
+        - item.type == 'A'
+        - "'local.langhome.net' in item.name"
+      loop: "{{ list_records_response.results | selectattr('json', 'defined') | selectattr('json.response.records', 'defined') | map(attribute='json.response.records') | list | flatten }}"
+
+    - name: Set records as a fact for localhost
+      set_fact:
+        remote_formatted_records: "{{ formatted_records }}"
+
+- name: save records to local file
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Save records to local file
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/records_from_server.yml"
+        mode: '0644'
+        content: "---\nrecords:\n{{ hostvars['technitium01']['remote_formatted_records'] | to_nice_yaml(indent=2) | regex_replace('^', '  ') }}"
