@@ -1,7 +1,7 @@
 ---
-- name: Include vars of records.yaml 
+- name: Include vars of records_from_server.yml
   include_vars:
-    file: records.yml
+    file: records_from_server.yml
 
 - name: create zones
   uri:
