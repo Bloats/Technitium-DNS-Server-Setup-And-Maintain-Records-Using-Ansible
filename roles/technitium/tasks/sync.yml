@@ -1,7 +1,7 @@
 ---
-- name: Include vars of records_from_server.yml
+- name: Include vars of records.yml
   include_vars:
-    file: records_from_server.yml
+    file: records.yml
 
 - name: Debug - Show records from config
   debug:
