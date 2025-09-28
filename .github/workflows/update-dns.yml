@@ -44,7 +44,7 @@ jobs:
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-        if: ${{ secrets.SSH_PRIVATE_KEY }}
+        if: secrets.SSH_PRIVATE_KEY != ''
 
       - name: Run Ansible Playbook
         run: |
