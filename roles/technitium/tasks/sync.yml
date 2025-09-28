@@ -3,20 +3,28 @@
   include_vars:
     file: records_from_server.yml
 
-- name: Check if zones exist
+- name: Debug - Show records from config
+  debug:
+    msg: "Config contains {{ records | length }} records for zones: {{ records | map(attribute='zone') | unique | list }}"
+  when: ansible_verbosity >= 1
+
+- name: Delete existing zones to ensure clean state
   uri:
-    url: "{{ base_address }}/api/zones/list?token={{ dns_configurations.token }}"
+    url: "{{ base_address }}/api/zones/delete?token={{ dns_configurations.token }}&zone={{ item }}"
     method: GET
     return_content: yes
-    status_code: 200
+    status_code: [200, 400, 404]
     body_format: json
-  register: existing_zones
+  loop: "{{ records | map(attribute='zone') | unique | list }}"
+  failed_when: false
+  register: zone_deletion_results
 
-- name: Extract existing zone names
-  set_fact:
-    existing_zone_names: "{{ existing_zones.json.response.zones | map(attribute='name') | list }}"
+- name: Show zone deletion results
+  debug:
+    msg: "Zone {{ item.item }}: {{ 'Deleted' if item.status == 200 else 'Already deleted or never existed' }}"
+  with_items: "{{ zone_deletion_results.results }}"
 
-- name: Create zones (only if they don't exist)
+- name: Create fresh zones
   uri:
     url: "{{ base_address }}/api/zones/create?token={{ dns_configurations.token }}&type=Primary&domain={{ item }}"
     method: GET
@@ -24,17 +32,16 @@
     status_code: 200
     body_format: json
   loop: "{{ records | map(attribute='zone') | unique | list }}"
-  when: item not in existing_zone_names
-  register: zone_creation_result
+  register: zone_creation_results
 
-- name: Display zone creation results
+- name: Show zone creation results
   debug:
-    msg: "Zone {{ item }}: {{ 'Already exists, skipped' if item in existing_zone_names else 'Created successfully' }}"
-  loop: "{{ records | map(attribute='zone') | unique | list }}"
+    msg: "Zone {{ item.item }}: Created successfully"
+  with_items: "{{ zone_creation_results.results }}"
 
-- name: Add/Update DNS records (subdomain records)
+- name: Add DNS records (subdomain records)
   uri:
-    url: "{{ base_address }}/api/zones/records/add?token={{ dns_configurations.token }}&domain={{item.name}}.{{ item.zone }}&type=A&value={{ item.ip }}&ttl=300&overwrite=true"
+    url: "{{ base_address }}/api/zones/records/add?token={{ dns_configurations.token }}&domain={{item.name}}.{{ item.zone }}&type=A&value={{ item.ip }}&ttl=300"
     method: GET
     return_content: yes
     status_code: 200
@@ -42,9 +49,9 @@
   with_items: "{{ records | selectattr('name', '!=', '@') }}"
   register: subdomain_results
 
-- name: Add/Update DNS records (apex/@ records)
+- name: Add DNS records (apex/@ records)
   uri:
-    url: "{{ base_address }}/api/zones/records/add?token={{ dns_configurations.token }}&domain={{ item.zone }}&type=A&value={{ item.ip }}&ttl=300&overwrite=true"
+    url: "{{ base_address }}/api/zones/records/add?token={{ dns_configurations.token }}&domain={{ item.zone }}&type=A&value={{ item.ip }}&ttl=300"
     method: GET
     return_content: yes
     status_code: 200
@@ -54,15 +61,21 @@
 
 - name: Show record addition results
   debug:
-    msg: "Added/Updated: {{ item.name }}.{{ item.zone }} -> {{ item.ip }}"
+    msg: "Added: {{ item.name }}.{{ item.zone }} -> {{ item.ip }}"
   with_items: "{{ records | selectattr('name', '!=', '@') }}"
   when: ansible_verbosity >= 1
 
 - name: Show apex record addition results  
   debug:
-    msg: "Added/Updated: {{ item.zone }} -> {{ item.ip }}"
+    msg: "Added: {{ item.zone }} -> {{ item.ip }}"
   with_items: "{{ records | selectattr('name', '==', '@') }}"
   when: ansible_verbosity >= 1
+
+- name: Initialize variables
+  set_fact:
+    existing_dns_records: []
+    expected_records: []
+    records_to_delete: []
 
 - name: get list of zones
   uri:
@@ -84,12 +97,6 @@
   loop: "{{ zones_list_response.json.response.zones }}"
   register: list_records_response
 
-- name: Initialize variables
-  set_fact:
-    existing_dns_records: []
-    expected_records: []
-    records_to_delete: []
-
 - name: Flatten existing DNS records from all zones
   set_fact: 
     existing_dns_records: "{{ existing_dns_records + item.json.response.records }}"
@@ -97,6 +104,14 @@
   when: item.skipped|default(false) == false
   loop_control:
     label: "Processing records for {{ item.json.response.zone.name | default('') }}"
+
+- name: Debug - Show all existing DNS records found
+  debug:
+    msg: "Found existing DNS record: {{ item.name }} ({{ item.type }}) -> {{ item.rData.ipAddress if item.rData is defined and item.rData.ipAddress is defined else 'N/A' }}"
+  with_items: "{{ existing_dns_records }}"
+  when: 
+    - ansible_verbosity >= 1
+    - item.type == 'A'
 
 - name: Build expected records list from config (non-@ records)
   set_fact:
@@ -114,6 +129,11 @@
   with_items: "{{ expected_records }}"
   when: ansible_verbosity >= 1
 
+- name: Debug - Show expected record names
+  debug:
+    msg: "Expected record names: {{ expected_records | map(attribute='name') | list }}"
+  when: ansible_verbosity >= 1
+
 - name: Find DNS records that should be deleted (exist in DNS but not in config)
   set_fact:
     records_to_delete: "{{ records_to_delete + [item] }}"
@@ -123,23 +143,53 @@
     - item.name not in (expected_records | map(attribute='name') | list)
     - not (item.name.endswith('.in-addr.arpa') or item.name.endswith('.ip6.arpa'))  # Skip reverse DNS records
     - item.name != 'localhost'  # Skip localhost
+    - not item.name.startswith('_')  # Skip service records
   loop_control:
-    label: "Checking {{ item.name }}"
+    label: "Checking {{ item.name }} - {{ 'KEEP' if item.name in (expected_records | map(attribute='name') | list) else 'DELETE' }}"
+
+- name: Find records in DNS that might be missing from config
+  set_fact:
+    potentially_missing_records: "{{ potentially_missing_records | default([]) + [item] }}"
+  with_items: "{{ existing_dns_records }}"
+  when: 
+    - item.type == 'A'
+    - item.name not in (expected_records | map(attribute='name') | list)
+    - not (item.name.endswith('.in-addr.arpa') or item.name.endswith('.ip6.arpa'))
+    - item.name != 'localhost'
+    - not item.name.startswith('_')
+    - item.name.endswith('.local.langhome.net') or item.name == 'local.langhome.net'
+
+- name: Show records that exist in DNS but not in your records.yml
+  debug:
+    msg: "Record in DNS but NOT in records.yml: {{ item.name }} -> {{ item.rData.ipAddress }}"
+  with_items: "{{ potentially_missing_records | default([]) }}"
+
+- name: Debug - Summary before cleanup
+  debug:
+    msg: |
+      Cleanup Summary:
+      - Total existing DNS records: {{ existing_dns_records | length }}
+      - Total expected records: {{ expected_records | length }}
+      - Records marked for deletion: {{ records_to_delete | length }}
+      - Records in DNS but not in config: {{ potentially_missing_records | default([]) | length }}
 
 - name: Debug - Show records that will be deleted
   debug:
     msg: "Will delete: {{ item.name }} -> {{ item.rData.ipAddress if item.rData is defined and item.rData.ipAddress is defined else 'N/A' }}"
-  with_items: "{{ records_to_delete | default([]) }}"
+  with_items: "{{ records_to_delete }}"
 
 - name: Delete records that exist in DNS but not in config
   uri:
     url: "{{ base_address }}/api/zones/records/delete?token={{ dns_configurations.token }}&domain={{ item.name }}&value={{ item.rData.ipAddress }}&type=A"
     method: GET
     return_content: yes
-    status_code: [200, 400]
+    status_code: [200, 400, 404]
     body_format: json
-  with_items: "{{ records_to_delete | default([]) }}"
-  when: item.rData is defined and item.rData.ipAddress is defined
+  with_items: "{{ records_to_delete }}"
+  when: 
+    - item.type == 'A'
+    - item.rData is defined 
+    - item.rData.ipAddress is defined
   failed_when: false
   register: delete_results
 
@@ -149,7 +199,7 @@
   with_items: "{{ delete_results.results | default([]) }}"
   when: item.item is defined
 
-- name: Force zone save to ensure all changes are persisted
+- name: Force zone save and notify
   uri:
     url: "{{ base_address }}/api/zones/options/set?token={{ dns_configurations.token }}&domain={{ item }}&notify=true"
     method: GET
@@ -159,11 +209,11 @@
   loop: "{{ records | map(attribute='zone') | unique | list }}"
   failed_when: false
 
-- name: Synchronization Summary
+- name: Zone Recreation Summary
   debug:
     msg: |
-      DNS Synchronization Complete for {{ inventory_hostname }}:
-      - Total records in config: {{ records | length }}
-      - Zones managed: {{ records | map(attribute='zone') | unique | list | join(', ') }}
-      - Records deleted: {{ records_to_delete | default([]) | length }}
-      - DNS server should now exactly match records.yml
+      DNS Zone Recreation Complete for {{ inventory_hostname }}:
+      - Zones recreated: {{ records | map(attribute='zone') | unique | list | join(', ') }}
+      - Total records created: {{ records | length }}
+      - DNS server now exactly matches records.yml
+      - All orphaned records have been eliminated

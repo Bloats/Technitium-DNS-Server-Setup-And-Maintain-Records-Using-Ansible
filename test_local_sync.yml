@@ -1,0 +1,90 @@
+---
+# Quick test to validate record synchronization logic
+- name: Test record sync logic locally
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - roles/technitium/vars/records.yml
+  vars:
+    # Simulate some existing DNS records that include both matching and non-matching records
+    simulated_existing_dns: 
+      - name: 'local.langhome.net'
+        type: 'A'
+        rData: { ipAddress: '192.168.1.51' }
+      - name: 'local.langhome.net'
+        type: 'A'
+        rData: { ipAddress: '192.168.1.52' }
+      - name: 'gitea.local.langhome.net'
+        type: 'A'
+        rData: { ipAddress: '192.168.1.181' }
+      - name: 'old-service.local.langhome.net'  # Should be deleted
+        type: 'A'
+        rData: { ipAddress: '192.168.1.100' }
+      - name: 'deprecated.local.langhome.net'   # Should be deleted
+        type: 'A'
+        rData: { ipAddress: '192.168.1.200' }
+      
+  tasks:
+    - name: Initialize variables
+      set_fact:
+        existing_dns_records: []
+        expected_records: []
+        records_to_delete: []
+        potentially_missing_records: []
+
+    - name: Simulate existing DNS records
+      set_fact: 
+        existing_dns_records: "{{ simulated_existing_dns }}"
+
+    - name: Show what's in records.yml
+      debug:
+        msg: "records.yml contains: {{ item.name }}{% if item.name != '@' %}.{% endif %}{{ item.zone }} -> {{ item.ip }}"
+      with_items: "{{ records }}"
+
+    - name: Build expected records list from config (non-@ records)
+      set_fact:
+        expected_records: "{{ expected_records + [{'name': item.name + '.' + item.zone, 'ip': item.ip, 'zone': item.zone, 'record_name': item.name}] }}"
+      with_items: "{{ records | selectattr('name', '!=', '@') }}"
+
+    - name: Build expected records list from config (@ records)
+      set_fact:
+        expected_records: "{{ expected_records + [{'name': item.zone, 'ip': item.ip, 'zone': item.zone, 'record_name': '@'}] }}"
+      with_items: "{{ records | selectattr('name', '==', '@') }}"
+
+    - name: Show expected record names
+      debug:
+        msg: "Expected names: {{ expected_records | map(attribute='name') | list }}"
+
+    - name: Find records that should be deleted
+      set_fact:
+        records_to_delete: "{{ records_to_delete + [item] }}"
+      with_items: "{{ existing_dns_records }}"
+      when: 
+        - item.type == 'A'
+        - item.name not in (expected_records | map(attribute='name') | list)
+        - not (item.name.endswith('.in-addr.arpa') or item.name.endswith('.ip6.arpa'))
+        - item.name != 'localhost'
+        - not item.name.startswith('_')
+
+    - name: Find potentially missing records
+      set_fact:
+        potentially_missing_records: "{{ potentially_missing_records + [item] }}"
+      with_items: "{{ existing_dns_records }}"
+      when: 
+        - item.type == 'A'
+        - item.name not in (expected_records | map(attribute='name') | list)
+        - not (item.name.endswith('.in-addr.arpa') or item.name.endswith('.ip6.arpa'))
+        - item.name != 'localhost'
+        - not item.name.startswith('_')
+        - item.name.endswith('.local.langhome.net') or item.name == 'local.langhome.net'
+
+    - name: Final test results
+      debug:
+        msg: |
+          TEST RESULTS:
+          - Records in your records.yml: {{ records | length }}
+          - Expected records built: {{ expected_records | length }}
+          - Simulated existing DNS records: {{ existing_dns_records | length }}
+          - Records that would be DELETED: {{ records_to_delete | length }}
+          - Records to delete: {{ records_to_delete | map(attribute='name') | list }}
+          - Records in DNS but missing from config: {{ potentially_missing_records | map(attribute='name') | list }}
