@@ -41,10 +41,12 @@ jobs:
           ssh-keyscan -H technitium02 >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Setup SSH private key
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-        if: secrets.SSH_PRIVATE_KEY != ''
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+        if: env.SSH_KEY != ''
 
       - name: Run Ansible Playbook
         run: |
