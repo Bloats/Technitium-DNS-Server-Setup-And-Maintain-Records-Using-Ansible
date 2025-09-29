@@ -69,3 +69,6 @@ records:
   - zone: 'local.langhome.net'
     ip: '192.168.1.193'
     name: 'ansible-host'
+  - zone: 'local.langhome.net'
+    ip: '192.168.1.181'
+    name: 'dockerhost04'
