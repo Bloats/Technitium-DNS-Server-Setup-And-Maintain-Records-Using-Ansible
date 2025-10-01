@@ -69,3 +69,6 @@ records:
   - zone: 'local.langhome.net'
     ip: '192.168.1.181'
     name: 'dockerhost04'
+  - zone: 'local.langhome.net'
+    ip: '192.168.1.188'
+    name: 'wazuh'
