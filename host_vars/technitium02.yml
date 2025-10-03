@@ -1,5 +1,5 @@
 ---
-base_address: 'http://192.168.1.52:5380'
+base_address: 'https://192.168.1.52:53443'
 dns_configurations:
         token: !vault |
                 $ANSIBLE_VAULT;1.1;AES256
