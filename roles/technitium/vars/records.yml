@@ -74,5 +74,4 @@ records:
     name: 'wazuh'
   - zone: 'local.langhome.net'
     ip: '192.168.1.201'
-    name: 'heimdall'
-    
+    name: 'portainer'
