@@ -75,3 +75,6 @@ records:
   - zone: 'local.langhome.net'
     ip: '192.168.1.201'
     name: 'portainer'
+  - zone: 'local.langhome.net'
+    ip: '192.168.1.76'
+    name: 'pulse'
