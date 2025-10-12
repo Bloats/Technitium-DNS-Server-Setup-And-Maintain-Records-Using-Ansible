@@ -20,7 +20,7 @@ records:
     name: 'jellyfin'
   - zone: 'local.langhome.net'
     ip: '192.168.1.185'
-    name: 'jellyseer'
+    name: 'Jellyseerr'
   - zone: 'local.langhome.net'
     ip: '192.168.1.185'
     name: 'n8n'
