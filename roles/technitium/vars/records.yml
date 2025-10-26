@@ -80,4 +80,4 @@ records:
     name: 'pulse'
   - zone: 'local.langhome.net'
     ip: '192.168.1.55'
-    name: 'dockercores'
+    name: 'dockercore'
