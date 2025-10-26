@@ -11,6 +11,8 @@ jobs:
   sync-dns:
     runs-on: [self-hosted]
     env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       VAULT_PASS: ${{ secrets.VAULT_PASS }}
     steps:
       - name: Checkout repository
