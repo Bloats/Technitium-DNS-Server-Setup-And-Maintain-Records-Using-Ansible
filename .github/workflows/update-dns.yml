@@ -52,5 +52,4 @@ jobs:
           export ANSIBLE_CONFIG=$(pwd)/ansible.cfg
           export ANSIBLE_HOST_KEY_CHECKING=False
           ansible-playbook -v --vault-password-file vault_pass.txt \
-            # playbooks/sync_selected_dns.yml -e "target_servers=technitium01,technitium02,dockercore"
-            playbooks/sync_selected_dns.yml -e "target_servers=dockercore"
+            playbooks/sync_selected_dns.yml -e "target_servers=dockercore"           
