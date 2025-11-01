@@ -84,3 +84,6 @@ records:
   - zone: 'timtech.uk'
     ip: '192.168.1.55'
     name: 'dockercore' 
+  - zone: 'local.langhome.net'
+    ip: '192.168.1.20'
+    name: 'homeassistant' 
