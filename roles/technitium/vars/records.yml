@@ -87,3 +87,6 @@ records:
   - zone: 'local.langhome.net'
     ip: '192.168.1.20'
     name: 'homeassistant' 
+  - zone: 'local.langhome.net'
+    ip: '192.168.1.191'
+    name: 'jellyfin-vm' 
